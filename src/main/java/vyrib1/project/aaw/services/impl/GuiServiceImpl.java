@@ -44,9 +44,10 @@ public class GuiServiceImpl implements GuiService {
         int x = 10;
         int y = cameraService.getDayFrame().rows() - 10;
 
-        Frame frame = converter.convert(cameraService.getDayFrame());
         Thread.startVirtualThread(() -> {
+            Frame frame;
             while (true) {
+                frame = converter.convert(cameraService.getDayFrame());
                 canvas.showImage(frame);
                 putText(cameraService.getDayFrame(), lrfService.getDistanceMeters() + "m", new Point(x, y), font, fontScale, color, thickness, LINE_AA, false);
                 //if(lastDistance != lrfService.getDistanceMeters()){
