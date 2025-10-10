@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.bytedeco.javacv.CanvasFrame;
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.javacv.Java2DFrameConverter;
 import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
@@ -13,6 +14,8 @@ import vyrib1.project.aaw.services.GuiService;
 import vyrib1.project.aaw.services.LrfService;
 
 import javax.swing.JFrame;
+
+import java.awt.image.BufferedImage;
 
 import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
 import static org.opencv.imgproc.Imgproc.LINE_AA;
@@ -46,9 +49,12 @@ public class GuiServiceImpl implements GuiService {
 
         Thread.startVirtualThread(() -> {
             Frame frame;
+            BufferedImage img;
             while (true) {
                 frame = converter.convert(cameraService.getDayFrame());
-                canvas.showImage(frame);
+                img = new Java2DFrameConverter().convert(frame);
+
+                canvas.showImage(img);
                 putText(cameraService.getDayFrame(), lrfService.getDistanceMeters() + "m", new Point(x, y), font, fontScale, color, thickness, LINE_AA, false);
                 //if(lastDistance != lrfService.getDistanceMeters()){
                 //lastDistance = lrfService.getDistanceMeters();
