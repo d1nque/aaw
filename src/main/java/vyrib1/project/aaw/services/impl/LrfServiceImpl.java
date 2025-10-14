@@ -24,10 +24,6 @@ public class LrfServiceImpl implements LrfService {
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private Thread readerThread;
 
-    public LrfServiceImpl() {
-        startLrf();
-    }
-
     @Override
     public void startLrf() {
         if (running.get()) {
