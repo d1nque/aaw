@@ -27,7 +27,7 @@ public class GuiServiceImpl implements GuiService {
     static {
         try {
             // Try to load OpenCV native library
-            nu.pattern.OpenCV.loadShared();
+            nu.pattern.OpenCV.loadLocally();
             System.out.println("OpenCV loaded successfully");
         } catch (Exception e) {
             try {
@@ -43,6 +43,9 @@ public class GuiServiceImpl implements GuiService {
     @Override
     @SneakyThrows
     public void startGui() {
+        System.out.printf("Starting LRF service...%n");
+        lrfService.startLrf();
+
         System.out.println("Starting GUI...");
         Thread.sleep(2000);
 

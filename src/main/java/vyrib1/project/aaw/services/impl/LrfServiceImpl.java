@@ -28,6 +28,7 @@ public class LrfServiceImpl implements LrfService {
         startLrf();
     }
 
+    @Override
     public void startLrf() {
         if (running.get()) {
             logger.warn("LRF service already running");
