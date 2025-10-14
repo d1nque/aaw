@@ -15,7 +15,7 @@ public class LrfServiceImpl implements LrfService {
     private double distanceMeters = -1.0;
 
     public LrfServiceImpl() {
-        //startLrf();
+        startLrf();
     }
 
     public void startLrf() {
