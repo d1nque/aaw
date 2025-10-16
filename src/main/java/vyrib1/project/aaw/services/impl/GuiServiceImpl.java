@@ -15,11 +15,11 @@ import vyrib1.project.aaw.services.GuiService;
 import vyrib1.project.aaw.services.LrfService;
 
 import java.awt.event.KeyEvent;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 
-import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
-import static org.opencv.imgproc.Imgproc.LINE_AA;
-import static org.opencv.imgproc.Imgproc.putText;
+import static org.opencv.imgproc.Imgproc.*;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +30,7 @@ public class GuiServiceImpl implements GuiService {
 
     private GpioButtons gpioButtons;
 
-    private int x = 10;
+    private int x = 0;
     private int y = 0;
     private double lastDistance = 0.0;
 
@@ -80,7 +80,10 @@ public class GuiServiceImpl implements GuiService {
         int crosshairThickness = 2;
         int crosshairLength = 35; // Length of crosshair lines
 
-        HighGui.namedWindow("Camera Feed", HighGui.WINDOW_AUTOSIZE);
+        x = cameraService.getDayFrame().cols() / 2;
+        y = cameraService.getDayFrame().rows() / 2;
+
+        HighGui.namedWindow("Camera Feed", HighGui.WINDOW_NORMAL);
         // Use regular thread instead of virtual thread for GUI operations
         Thread guiThread = new Thread(() -> {
             System.out.println("GUI thread started");
@@ -95,10 +98,6 @@ public class GuiServiceImpl implements GuiService {
 
                     // Clone the frame to avoid modifying the original
                     Mat displayFrame = frame.clone();
-
-                    // Calculate center coordinates
-                    x = displayFrame.cols() / 2;
-                    y = displayFrame.rows() / 2;
 
                     // Draw crosshair - horizontal line
                     Imgproc.line(displayFrame,
@@ -120,9 +119,9 @@ public class GuiServiceImpl implements GuiService {
                             new Point(10, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
 
                     //Add angle text to the frame
-                    String angleText = lrfService.getAngleDegrees() + "°";
+                    String angleText = lrfService.getAngleDegrees() + "*";
                     putText(displayFrame, angleText,
-                            new Point(20, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
+                            new Point(150, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
 
                     // Display the frame using OpenCV's imshow
                     HighGui.imshow("Camera Feed", displayFrame);
@@ -163,6 +162,7 @@ public class GuiServiceImpl implements GuiService {
                     int key = getGpioButtonStatus();
                     if (key != 0) {
                         handleGpioButtonPress(key);
+                        saveCoordinatesToFile();
                         System.out.println("GPIO Button Pressed: " + KeyEvent.getKeyText(key));
                         System.out.println("Current Position: x=" + x + ", y=" + y);
                     }
@@ -211,6 +211,15 @@ public class GuiServiceImpl implements GuiService {
         }
 
         return result;
+    }
+
+    private void saveCoordinatesToFile() {
+        try (PrintWriter writer = new PrintWriter(new FileWriter("coordinates.txt", false))) {
+            writer.printf("x=%d, y=%d%n", x, y);
+            System.out.printf("Saved to file: x=%d, y=%d%n", x, y);
+        } catch (IOException e) {
+            System.err.println("Error writing coordinates to file: " + e.getMessage());
+        }
     }
 
 }

@@ -44,7 +44,7 @@ public class CameraServiceImpl implements CameraService {
     private void setDayCameraProperties() {
         dayCamera.set(Videoio.CAP_PROP_FOURCC, VideoWriter.fourcc('M', 'J', 'P', 'G'));
         dayCamera.set(Videoio.CAP_PROP_FRAME_WIDTH, 1280);
-        dayCamera.set(Videoio.CAP_PROP_FRAME_HEIGHT, 720);
+        dayCamera.set(Videoio.CAP_PROP_FRAME_HEIGHT, 960);
         dayCamera.set(Videoio.CAP_PROP_FPS, 30);
     }
 
