@@ -97,26 +97,32 @@ public class GuiServiceImpl implements GuiService {
                     Mat displayFrame = frame.clone();
 
                     // Calculate center coordinates
-                    int centerX = displayFrame.cols() / 2;
-                    int centerY = displayFrame.rows() / 2;
+                    x = displayFrame.cols() / 2;
+                    y = displayFrame.rows() / 2;
 
                     // Draw crosshair - horizontal line
                     Imgproc.line(displayFrame,
-                            new Point(centerX - crosshairLength, centerY),
-                            new Point(centerX + crosshairLength, centerY),
+                            new Point(x - crosshairLength, y),
+                            new Point(x + crosshairLength, y),
                             crosshairColor, crosshairThickness, LINE_AA);
 
                     // Draw crosshair - vertical line
                     Imgproc.line(displayFrame,
-                            new Point(centerX, centerY - crosshairLength),
-                            new Point(centerX, centerY + crosshairLength),
+                            new Point(x, y - crosshairLength),
+                            new Point(x, y + crosshairLength),
                             crosshairColor, crosshairThickness, LINE_AA);
 
+                    int currentY = displayFrame.rows() - 10;
 
                     // Add distance text to the frame
                     String distanceText = lrfService.getDistanceMeters() + "m";
                     putText(displayFrame, distanceText,
-                            new Point(x, y), font, fontScale, textColor, thickness, LINE_AA, false);
+                            new Point(10, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
+
+                    //Add angle text to the frame
+                    String angleText = lrfService.getAngleDegrees() + "°";
+                    putText(displayFrame, angleText,
+                            new Point(20, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
 
                     // Display the frame using OpenCV's imshow
                     HighGui.imshow("Camera Feed", displayFrame);

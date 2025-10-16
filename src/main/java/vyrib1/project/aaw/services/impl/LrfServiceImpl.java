@@ -20,6 +20,7 @@ public class LrfServiceImpl implements LrfService {
 
     private SerialPort port; // Remove static - causes issues in Spring
     private final AtomicReference<Double> distanceMeters = new AtomicReference<>(-1.0);
+    private final AtomicReference<Double> angleDegrees = new AtomicReference<>(0.0);
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private Thread readerThread;
@@ -147,28 +148,36 @@ public class LrfServiceImpl implements LrfService {
     private void parseDistanceData(byte[] data) {
         byte flags = data[2];
         boolean distInvalid = (flags & 0x80) != 0;
+        boolean angleInvalid = (flags & 0x40) != 0;
         boolean highRes = (flags & 0x20) != 0;
         boolean yard = (flags & 0x10) != 0;
 
-        if (!distInvalid && data.length >= 5) {
-            // Extract distance value (big-endian)
+        if (!distInvalid && data.length >= 6) {
             int distRaw = ((data[3] & 0xFF) << 8) | (data[4] & 0xFF);
-
-            // Convert based on resolution and unit
             double dist = highRes ? distRaw / 10.0 : distRaw / 2.0;
             double distanceInMeters = yard ? dist * 0.9144 : dist;
 
-            // Update atomic reference for thread safety
+            double angleDegrees = Double.NaN;
+            if (!angleInvalid) {
+                byte angleByte = data[5];
+                // angleByte – two’s complement signed byte => in Java it’s already signed
+                angleDegrees = angleByte;  // in degrees
+            }
+
+            // Тепер можна зберегти обидва: distance & angle
             distanceMeters.set(distanceInMeters);
+            this.angleDegrees.set(angleDegrees);
+            // якщо є змінна atomic для кута, set її теж
 
-            logger.debug("Distance: {:.1f} {} (Raw: {}, Flags: 0x{})",
-                    dist, yard ? "yards" : "meters", distRaw, String.format("%02X", flags));
-
+            logger.debug("Distance = {} m, Angle = {}° (flags = 0x{})",
+                    distanceInMeters, angleDegrees, String.format("%02X", flags));
         } else {
-            logger.debug("Invalid distance measurement (flags: 0x{})", String.format("%02X", flags));
-            distanceMeters.set(-1.0); // Invalid measurement
+            // Обробка недійсного результату
+            distanceMeters.set(-1.0);
+            logger.debug("Invalid measurement (flags: 0x{})", String.format("%02X", flags));
         }
     }
+
 
     private String bytesToHex(byte[] bytes, int length) {
         StringBuilder sb = new StringBuilder();
@@ -181,6 +190,11 @@ public class LrfServiceImpl implements LrfService {
     @Override
     public double getDistanceMeters() {
         return distanceMeters.get();
+    }
+
+    @Override
+    public double getAngleDegrees() {
+        return angleDegrees.get();
     }
 
     public boolean isConnected() {

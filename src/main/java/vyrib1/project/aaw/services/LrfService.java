@@ -4,4 +4,6 @@ public interface LrfService {
     void startLrf();
 
     double getDistanceMeters();
+
+    double getAngleDegrees();
 }
