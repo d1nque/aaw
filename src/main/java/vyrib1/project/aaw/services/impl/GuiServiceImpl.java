@@ -117,7 +117,7 @@ public class GuiServiceImpl implements GuiService {
                             new Point(x, y + crosshairLength),
                             crosshairColor, crosshairThickness, LINE_AA);
 
-                    int currentY = displayFrame.rows() - 20;
+                    int currentY = displayFrame.rows() - 30;
 
                     // Add distance text to the frame
                     String distanceText = lrfService.getDistanceMeters() + "m";
