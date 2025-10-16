@@ -6,6 +6,7 @@ import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.highgui.HighGui;
 import org.opencv.imgproc.Imgproc;
 import org.springframework.stereotype.Service;
@@ -19,7 +20,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 
-import static org.opencv.imgproc.Imgproc.*;
+import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
+import static org.opencv.imgproc.Imgproc.LINE_AA;
+import static org.opencv.imgproc.Imgproc.putText;
 
 @Service
 @RequiredArgsConstructor
@@ -88,6 +91,7 @@ public class GuiServiceImpl implements GuiService {
         // Use regular thread instead of virtual thread for GUI operations
         Thread guiThread = new Thread(() -> {
             System.out.println("GUI thread started");
+            Size newSize = new Size(720, 576);
             try {
                 while (true) {
                     Mat frame = cameraService.getDayFrame();
@@ -99,6 +103,7 @@ public class GuiServiceImpl implements GuiService {
 
                     // Clone the frame to avoid modifying the original
                     Mat displayFrame = frame.clone();
+                    Imgproc.resize(displayFrame, displayFrame, newSize);
 
                     // Draw crosshair - horizontal line
                     Imgproc.line(displayFrame,
@@ -122,8 +127,7 @@ public class GuiServiceImpl implements GuiService {
                     //Add angle text to the frame
                     String angleText = lrfService.getAngleDegrees() + "*";
                     putText(displayFrame, angleText,
-                            new Point(150, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
-
+                            new Point(135, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
 
 
                     // Display the frame using OpenCV's imshow
