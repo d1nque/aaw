@@ -7,10 +7,15 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.highgui.HighGui;
+import org.opencv.imgproc.Imgproc;
 import org.springframework.stereotype.Service;
+import vyrib1.project.aaw.data.domain.GpioButtons;
 import vyrib1.project.aaw.services.CameraService;
 import vyrib1.project.aaw.services.GuiService;
 import vyrib1.project.aaw.services.LrfService;
+
+import java.awt.event.KeyEvent;
+import java.io.IOException;
 
 import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
 import static org.opencv.imgproc.Imgproc.LINE_AA;
@@ -22,6 +27,11 @@ public class GuiServiceImpl implements GuiService {
 
     private final CameraService cameraService;
     private final LrfService lrfService;
+
+    private GpioButtons gpioButtons;
+
+    private int x = 10;
+    private int y = 0;
     private double lastDistance = 0.0;
 
     static {
@@ -46,6 +56,10 @@ public class GuiServiceImpl implements GuiService {
         System.out.printf("Starting LRF service...%n");
         lrfService.startLrf();
 
+        System.out.println("Initializing GPIO buttons...");
+        gpioButtons = new GpioButtons();
+        startReadingGpioButtons();
+
         System.out.println("Starting GUI...");
         Thread.sleep(2000);
 
@@ -61,10 +75,12 @@ public class GuiServiceImpl implements GuiService {
         int font = FONT_HERSHEY_SIMPLEX;
         double fontScale = 1.0;
         int thickness = 2;
-        Scalar color = new Scalar(0, 0, 255); // Red color in BGR
-        int x = 10;
-        int y = cameraService.getDayFrame().rows() - 10;
+        Scalar textColor = new Scalar(0, 0, 255); // Red color in BGR
+        Scalar crosshairColor = new Scalar(0, 0, 255); // Red color for crosshair
+        int crosshairThickness = 2;
+        int crosshairLength = 35; // Length of crosshair lines
 
+        HighGui.namedWindow("Camera Feed", HighGui.WINDOW_AUTOSIZE);
         // Use regular thread instead of virtual thread for GUI operations
         Thread guiThread = new Thread(() -> {
             System.out.println("GUI thread started");
@@ -80,13 +96,27 @@ public class GuiServiceImpl implements GuiService {
                     // Clone the frame to avoid modifying the original
                     Mat displayFrame = frame.clone();
 
-                    // Update y position in case frame size changed
-                    int currentY = displayFrame.rows() - 10;
+                    // Calculate center coordinates
+                    int centerX = displayFrame.cols() / 2;
+                    int centerY = displayFrame.rows() / 2;
+
+                    // Draw crosshair - horizontal line
+                    Imgproc.line(displayFrame,
+                            new Point(centerX - crosshairLength, centerY),
+                            new Point(centerX + crosshairLength, centerY),
+                            crosshairColor, crosshairThickness, LINE_AA);
+
+                    // Draw crosshair - vertical line
+                    Imgproc.line(displayFrame,
+                            new Point(centerX, centerY - crosshairLength),
+                            new Point(centerX, centerY + crosshairLength),
+                            crosshairColor, crosshairThickness, LINE_AA);
+
 
                     // Add distance text to the frame
                     String distanceText = lrfService.getDistanceMeters() + "m";
                     putText(displayFrame, distanceText,
-                            new Point(x, currentY), font, fontScale, color, thickness, LINE_AA, false);
+                            new Point(x, y), font, fontScale, textColor, thickness, LINE_AA, false);
 
                     // Display the frame using OpenCV's imshow
                     HighGui.imshow("Camera Feed", displayFrame);
@@ -117,8 +147,64 @@ public class GuiServiceImpl implements GuiService {
         guiThread.setName("GUI-Display-Thread");
         guiThread.start();
         System.out.println("GUI thread launched");
-
-        // Optional: Join the thread if you want to wait for it to complete
-        // guiThread.join();
     }
+
+    private void startReadingGpioButtons() {
+        Thread.startVirtualThread(() -> {
+            System.out.println("Started reading GPIO buttons");
+            while (true) {
+                try {
+                    int key = getGpioButtonStatus();
+                    if (key != 0) {
+                        handleGpioButtonPress(key);
+                        System.out.println("GPIO Button Pressed: " + KeyEvent.getKeyText(key));
+                        System.out.println("Current Position: x=" + x + ", y=" + y);
+                    }
+                    Thread.sleep(100);
+                } catch (IOException | InterruptedException e) {
+                    System.err.println("Error reading GPIO buttons: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+    private void handleGpioButtonPress(int key) {
+        switch (key) {
+            case KeyEvent.VK_RIGHT:
+                x += 5;
+                break;
+            case KeyEvent.VK_LEFT:
+                x -= 5;
+                break;
+            case KeyEvent.VK_UP:
+                y -= 5;
+                break;
+            case KeyEvent.VK_DOWN:
+                y += 5;
+                break;
+            case KeyEvent.VK_SPACE:
+                System.out.println("Center button pressed");
+                break;
+        }
+    }
+
+    private int getGpioButtonStatus() throws IOException {
+        int result = 0;
+
+        if (gpioButtons.centerBtn.isActive()) {
+            result = KeyEvent.VK_SPACE;
+        } else if (gpioButtons.upBtn.isActive()) {
+            result = KeyEvent.VK_UP;
+        } else if (gpioButtons.downBtn.isActive()) {
+            result = KeyEvent.VK_DOWN;
+        } else if (gpioButtons.leftBtn.isActive()) {
+            result = KeyEvent.VK_LEFT;
+        } else if (gpioButtons.rightBtn.isActive()) {
+            result = KeyEvent.VK_RIGHT;
+        }
+
+        return result;
+    }
+
 }
