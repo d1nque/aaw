@@ -33,8 +33,8 @@ public class GuiServiceImpl implements GuiService {
 
     private GpioButtons gpioButtons;
 
-    private int x = 0;
-    private int y = 0;
+    private int x = 640;
+    private int y = 480;
     private double lastDistance = 0.0;
 
     static {
