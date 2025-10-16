@@ -84,6 +84,7 @@ public class GuiServiceImpl implements GuiService {
         y = cameraService.getDayFrame().rows() / 2;
 
         HighGui.namedWindow("Camera Feed", HighGui.WINDOW_NORMAL);
+        HighGui.resizeWindow("Camera Feed", 720, 576);
         // Use regular thread instead of virtual thread for GUI operations
         Thread guiThread = new Thread(() -> {
             System.out.println("GUI thread started");
@@ -122,6 +123,8 @@ public class GuiServiceImpl implements GuiService {
                     String angleText = lrfService.getAngleDegrees() + "*";
                     putText(displayFrame, angleText,
                             new Point(150, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
+
+
 
                     // Display the frame using OpenCV's imshow
                     HighGui.imshow("Camera Feed", displayFrame);
