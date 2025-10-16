@@ -34,10 +34,8 @@ public class LrfServiceImpl implements LrfService {
 
         String portName = "/dev/serial0";
         port = SerialPort.getCommPort(portName);
-
-        // Configure port for LRF3K1LS
         port.setComPortParameters(19200, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
-        port.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 500, 500); // Increased timeout
+        port.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 500, 500);
         port.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED);
 
         if (!port.openPort()) {
@@ -50,18 +48,21 @@ public class LrfServiceImpl implements LrfService {
         connected.set(true);
         running.set(true);
 
-        // Clear any existing data in buffers
+        // Очистка буферів
         port.flushIOBuffers();
+
+        // Відправляємо команду старту з continuous, meters, small target
+        sendStartRangingCommand();
 
         readerThread = Thread.ofVirtual().name("LRF-Reader").start(() -> {
             try {
                 while (running.get() && connected.get()) {
                     try {
+                        // Якщо модуль у continuous режимі, тоді просто запитуємо READ_RESULT
                         sendCommand(CMD_READ_RESULT);
-                        Thread.sleep(100); // 10Hz update rate
+                        Thread.sleep(100);
                     } catch (Exception e) {
                         logger.error("Error reading from LRF", e);
-                        // Try to reconnect after error
                         Thread.sleep(1000);
                     }
                 }
@@ -72,6 +73,56 @@ public class LrfServiceImpl implements LrfService {
                 cleanup();
             }
         });
+    }
+
+    private void sendStartRangingCommand() {
+        // Формування параметрів: D6 = 1 (continuous), D5 = 0 (fog off), D4 = 0 (meter), D3-D0 = режим small target (наприклад 2)
+        int mode = 2; // small target
+        byte param = 0;
+        param |= (1 << 6);  // continuous
+        // fog off — не ставимо біт D5
+        // meter — D4 = 0
+        param |= (byte) (mode & 0x0F); // D3-D0
+
+        // Команда 0x83 з цим параметром
+        byte CMD_START_RANGING = (byte) 0x83;
+        sendRawCommand(CMD_START_RANGING, new byte[]{param});
+    }
+
+    private void sendRawCommand(byte command, byte[] params) {
+        if (!connected.get() || port == null) {
+            return;
+        }
+        try {
+            int paramLen = (params == null ? 0 : params.length);
+            byte[] frame = new byte[1 + 1 + paramLen + 1]; // addr + cmd + params + checksum
+            frame[0] = DEVICE_ADDRESS;
+            frame[1] = command;
+            if (paramLen > 0) {
+                System.arraycopy(params, 0, frame, 2, paramLen);
+            }
+            // checksum обчислюється таким чином
+            int sum = command & 0xFF;
+            for (int i = 0; i < paramLen; i++) {
+                sum += (params[i] & 0xFF);
+            }
+            int checksum = (0x100 - (sum & 0xFF)) & 0xFF;
+            frame[frame.length - 1] = (byte) checksum;
+
+            int written = port.writeBytes(frame, frame.length);
+            if (written != frame.length) {
+                logger.warn("Failed to write full start command frame");
+            }
+            // Опціонально прочитати ACK
+            Thread.sleep(10);
+            byte[] buf = new byte[16];
+            int nr = port.readBytes(buf, buf.length);
+            if (nr > 0 && logger.isDebugEnabled()) {
+                logger.debug("Start command response {} bytes: {}", nr, bytesToHex(buf, nr));
+            }
+        } catch (Exception e) {
+            logger.error("Error sending start ranging command", e);
+        }
     }
 
     private void sendCommand(byte command) {
