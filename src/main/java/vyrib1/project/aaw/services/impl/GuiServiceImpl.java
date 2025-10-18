@@ -62,8 +62,6 @@ public class GuiServiceImpl implements GuiService {
         System.out.printf("Starting LRF service...%n");
         lrfService.startLrf();
 
-        loadCoordinatesFromFiles();
-
         System.out.println("Initializing GPIO buttons...");
         gpioButtons = new GpioButtons();
         startReadingGpioButtons();
@@ -88,8 +86,7 @@ public class GuiServiceImpl implements GuiService {
         int crosshairThickness = 2;
         int crosshairLength = 35; // Length of crosshair lines
 
-        x = cameraService.getDayFrame().cols() / 2;
-        y = cameraService.getDayFrame().rows() / 2;
+        loadCoordinatesFromFiles();
 
         HighGui.namedWindow("Camera Feed", HighGui.WINDOW_NORMAL);
         HighGui.resizeWindow("Camera Feed", 720, 576);
