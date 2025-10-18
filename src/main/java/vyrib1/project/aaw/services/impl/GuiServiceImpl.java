@@ -16,9 +16,16 @@ import vyrib1.project.aaw.services.GuiService;
 import vyrib1.project.aaw.services.LrfService;
 
 import java.awt.event.KeyEvent;
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
 import static org.opencv.imgproc.Imgproc.LINE_AA;
@@ -58,6 +65,8 @@ public class GuiServiceImpl implements GuiService {
     public void startGui() {
         System.out.printf("Starting LRF service...%n");
         lrfService.startLrf();
+
+        loadCoordinatesFromFile(Paths.get("coordinates.txt"));
 
         System.out.println("Initializing GPIO buttons...");
         gpioButtons = new GpioButtons();
@@ -159,6 +168,57 @@ public class GuiServiceImpl implements GuiService {
         guiThread.setName("GUI-Display-Thread");
         guiThread.start();
         System.out.println("GUI thread launched");
+    }
+
+    private void getXandY() {
+        String filePath = "path/to/your/file.txt"; // Replace with the actual file path
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line);
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading file: " + e.getMessage());
+        }
+    }
+
+    private void loadCoordinatesFromFile(Path path) {
+        try {
+            if (!Files.exists(path)) {
+                System.out.println("coordinates.txt not found, using defaults x=0,y=0");
+                return;
+            }
+            String text = Files.readString(path).trim();
+
+            // Перший варіант: явно x=..., y=...
+            Pattern px = Pattern.compile("(?i)\\bx\\s*[:=]\\s*(-?\\d+)");
+            Pattern py = Pattern.compile("(?i)\\by\\s*[:=]\\s*(-?\\d+)");
+            Matcher mx = px.matcher(text);
+            Matcher my = py.matcher(text);
+
+            Integer newX = null, newY = null;
+            if (mx.find()) newX = Integer.parseInt(mx.group(1));
+            if (my.find()) newY = Integer.parseInt(my.group(1));
+
+            // Другий варіант: два числа у файлі, розділені нецифровим (кома/пробіл/новий рядок)
+            if (newX == null || newY == null) {
+                Pattern twoNums = Pattern.compile("(-?\\d+)\\D+(-?\\d+)");
+                Matcher m2 = twoNums.matcher(text);
+                if (m2.find()) {
+                    if (newX == null) newX = Integer.parseInt(m2.group(1));
+                    if (newY == null) newY = Integer.parseInt(m2.group(2));
+                }
+            }
+
+            if (newX != null) this.x = newX;
+            if (newY != null) this.y = newY;
+
+            System.out.println("Loaded coordinates from file: x={" + this.x + "}, y={" + this.y + "}");
+        } catch (Exception e) {
+            System.out.println("Failed to read coordinates.txt, using defaults x=0,y=0");
+            System.out.println(e.getMessage());
+        }
     }
 
     private void startReadingGpioButtons() {

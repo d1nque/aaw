@@ -153,11 +153,11 @@ public class LrfServiceImpl implements LrfService {
 
             if (numRead > 0) {
                 if (logger.isDebugEnabled()) {
-                    logger.debug("Received {} bytes: {}", numRead, bytesToHex(buffer, numRead));
+                    logger.info("Received {} bytes: {}", numRead, bytesToHex(buffer, numRead));
                 }
                 parseResponse(buffer, numRead);
             } else {
-                logger.debug("No data received from LRF");
+                logger.info("No data received from LRF");
             }
 
         } catch (Exception e) {
@@ -173,13 +173,13 @@ public class LrfServiceImpl implements LrfService {
 
     private void parseResponse(byte[] data, int len) {
         if (len < 5) {
-            logger.debug("Response too short: {} bytes", len);
+            logger.warn("Response too short: {} bytes", len);
             return;
         }
 
         // Check if this is a valid response
         if (data[0] != DEVICE_ADDRESS) {
-            logger.debug("Invalid device address in response: 0x{}", String.format("%02X", data[0]));
+            logger.warn("Invalid device address in response: 0x{}", String.format("%02X", data[0]));
             return;
         }
 
@@ -188,11 +188,11 @@ public class LrfServiceImpl implements LrfService {
         if (respType == 0x01 && len >= 6) { // RSP_DATA response
             parseDistanceData(data);
         } else if (respType == 0x02) { // RSP_ACK
-            logger.debug("Received ACK response");
+            logger.warn("Received ACK response");
         } else if (respType == 0x03) { // RSP_NACK
             logger.warn("Received NACK response");
         } else {
-            logger.debug("Unknown response type: 0x{}", String.format("%02X", respType));
+            logger.info("Unknown response type: 0x{}", String.format("%02X", respType));
         }
     }
 
@@ -220,12 +220,12 @@ public class LrfServiceImpl implements LrfService {
             this.angleDegrees.set(angleDegrees);
             // якщо є змінна atomic для кута, set її теж
 
-            logger.debug("Distance = {} m, Angle = {}° (flags = 0x{})",
+            logger.info("Distance = {} m, Angle = {}° (flags = 0x{})",
                     distanceInMeters, angleDegrees, String.format("%02X", flags));
         } else {
             // Обробка недійсного результату
             distanceMeters.set(-1.0);
-            logger.debug("Invalid measurement (flags: 0x{})", String.format("%02X", flags));
+            logger.info("Invalid measurement (flags: 0x{})", String.format("%02X", flags));
         }
     }
 
