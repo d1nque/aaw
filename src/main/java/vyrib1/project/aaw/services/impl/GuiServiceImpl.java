@@ -16,16 +16,12 @@ import vyrib1.project.aaw.services.GuiService;
 import vyrib1.project.aaw.services.LrfService;
 
 import java.awt.event.KeyEvent;
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
 import static org.opencv.imgproc.Imgproc.LINE_AA;
@@ -66,7 +62,7 @@ public class GuiServiceImpl implements GuiService {
         System.out.printf("Starting LRF service...%n");
         lrfService.startLrf();
 
-        loadCoordinatesFromFile(Paths.get("coordinates.txt"));
+        loadCoordinatesFromFiles();
 
         System.out.println("Initializing GPIO buttons...");
         gpioButtons = new GpioButtons();
@@ -170,56 +166,39 @@ public class GuiServiceImpl implements GuiService {
         System.out.println("GUI thread launched");
     }
 
-    private void getXandY() {
-        String filePath = "path/to/your/file.txt"; // Replace with the actual file path
+    private void loadCoordinatesFromFiles() {
+        Path xPath = Paths.get("x.txt");
+        Path yPath = Paths.get("y.txt");
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
-            }
-        } catch (IOException e) {
-            System.err.println("Error reading file: " + e.getMessage());
-        }
-    }
-
-    private void loadCoordinatesFromFile(Path path) {
         try {
-            if (!Files.exists(path)) {
-                System.out.println("coordinates.txt not found, using defaults x=0,y=0");
-                return;
+            if (Files.exists(xPath)) {
+                String xContent = Files.readString(xPath).trim();
+                this.x = Integer.parseInt(xContent);
+            } else {
+                System.out.println("x.txt not found, using default x=0");
+                this.x = 0;
             }
-            String text = Files.readString(path).trim();
-
-            // Перший варіант: явно x=..., y=...
-            Pattern px = Pattern.compile("(?i)\\bx\\s*[:=]\\s*(-?\\d+)");
-            Pattern py = Pattern.compile("(?i)\\by\\s*[:=]\\s*(-?\\d+)");
-            Matcher mx = px.matcher(text);
-            Matcher my = py.matcher(text);
-
-            Integer newX = null, newY = null;
-            if (mx.find()) newX = Integer.parseInt(mx.group(1));
-            if (my.find()) newY = Integer.parseInt(my.group(1));
-
-            // Другий варіант: два числа у файлі, розділені нецифровим (кома/пробіл/новий рядок)
-            if (newX == null || newY == null) {
-                Pattern twoNums = Pattern.compile("(-?\\d+)\\D+(-?\\d+)");
-                Matcher m2 = twoNums.matcher(text);
-                if (m2.find()) {
-                    if (newX == null) newX = Integer.parseInt(m2.group(1));
-                    if (newY == null) newY = Integer.parseInt(m2.group(2));
-                }
-            }
-
-            if (newX != null) this.x = newX;
-            if (newY != null) this.y = newY;
-
-            System.out.println("Loaded coordinates from file: x={" + this.x + "}, y={" + this.y + "}");
         } catch (Exception e) {
-            System.out.println("Failed to read coordinates.txt, using defaults x=0,y=0");
-            System.out.println(e.getMessage());
+            System.out.println("Error reading x.txt, using default x=0" + e.getMessage());
+            this.x = 0;
         }
+
+        try {
+            if (Files.exists(yPath)) {
+                String yContent = Files.readString(yPath).trim();
+                this.y = Integer.parseInt(yContent);
+            } else {
+                System.out.println("y.txt not found, using default y=0");
+                this.y = 0;
+            }
+        } catch (Exception e) {
+            System.out.println("Error reading y.txt, using default y=0" + e.getMessage());
+            this.y = 0;
+        }
+
+        System.out.println("Loaded coordinates: x={" + this.x + "}, y={" + this.y + "}");
     }
+
 
     private void startReadingGpioButtons() {
         Thread.startVirtualThread(() -> {
@@ -281,11 +260,18 @@ public class GuiServiceImpl implements GuiService {
     }
 
     private void saveCoordinatesToFile() {
-        try (PrintWriter writer = new PrintWriter(new FileWriter("coordinates.txt", false))) {
-            writer.printf("x=%d, y=%d%n", x, y);
-            System.out.printf("Saved to file: x=%d, y=%d%n", x, y);
+        try (PrintWriter writer = new PrintWriter(new FileWriter("x.txt", false))) {
+            writer.printf(String.valueOf(x));
+            System.out.printf("Saved x: " + x);
         } catch (IOException e) {
-            System.err.println("Error writing coordinates to file: " + e.getMessage());
+            System.err.println("Error writing x coordinates to file: " + e.getMessage());
+        }
+
+        try (PrintWriter writer = new PrintWriter(new FileWriter("y.txt", false))) {
+            writer.printf(String.valueOf(y));
+            System.out.printf("Saved y: " + y);
+        } catch (IOException e) {
+            System.err.println("Error writing y coordinates to file: " + e.getMessage());
         }
     }
 
