@@ -23,6 +23,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import vyrib1.project.aaw.config.FeatureConfig;
+
 import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
 import static org.opencv.imgproc.Imgproc.LINE_AA;
 import static org.opencv.imgproc.Imgproc.putText;
@@ -31,8 +33,11 @@ import static org.opencv.imgproc.Imgproc.putText;
 @RequiredArgsConstructor
 public class GuiServiceImpl implements GuiService {
 
+    /* Last found position: x=325, y=320 */
+
     private final CameraService cameraService;
     private final LrfService lrfService;
+    private final FeatureConfig featureConfig;
 
     private GpioButtons gpioButtons;
 
@@ -59,12 +64,20 @@ public class GuiServiceImpl implements GuiService {
     @Override
     @SneakyThrows
     public void startGui() {
-        System.out.printf("Starting LRF service...%n");
-        lrfService.startLrf();
+        if (featureConfig.getLrf().isEnabled()) {
+            System.out.printf("Starting LRF service...%n");
+            lrfService.startLrf();
+        } else {
+            System.out.println("LRF service disabled in config");
+        }
 
-        System.out.println("Initializing GPIO buttons...");
-        gpioButtons = new GpioButtons();
-        startReadingGpioButtons();
+        if (featureConfig.getGpioButtons().isEnabled()) {
+            System.out.println("Initializing GPIO buttons...");
+            gpioButtons = new GpioButtons();
+            startReadingGpioButtons();
+        } else {
+            System.out.println("GPIO buttons disabled in config");
+        }
 
         System.out.println("Starting GUI...");
         Thread.sleep(2000);
@@ -239,6 +252,10 @@ public class GuiServiceImpl implements GuiService {
     }
 
     private int getGpioButtonStatus() throws IOException {
+        if (gpioButtons == null) {
+            return 0;
+        }
+
         int result = 0;
 
         if (gpioButtons.centerBtn.isActive()) {

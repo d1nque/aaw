@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: aaw
+
+# Flags for hardware
+features:
+  gpio-buttons:
+    enabled: false
+  lrf:
+    enabled: false
+  camera:
+    day-camera-enabled: true
+    thermal-camera-enabled: false
+  logger:
+    enabled: false
+

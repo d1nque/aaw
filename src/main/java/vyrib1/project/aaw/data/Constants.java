@@ -13,7 +13,6 @@ public class Constants {
         public static final int CENTER_BTN_PIN = 26;
         public static final int LEFT_BTN_PIN = 17;
         public static final int RIGHT_BTN_PIN = 16;
-        public static final boolean USE_GPIO_BUTTONS = true;
     }
 
 

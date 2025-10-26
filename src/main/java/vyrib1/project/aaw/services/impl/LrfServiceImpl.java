@@ -5,6 +5,7 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import vyrib1.project.aaw.config.FeatureConfig;
 import vyrib1.project.aaw.services.LrfService;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,6 +19,7 @@ public class LrfServiceImpl implements LrfService {
 
     private static final Logger logger = LoggerFactory.getLogger(LrfServiceImpl.class);
 
+    private final FeatureConfig featureConfig;
     private SerialPort port; // Remove static - causes issues in Spring
     private final AtomicReference<Double> distanceMeters = new AtomicReference<>(-1.0);
     private final AtomicReference<Double> angleDegrees = new AtomicReference<>(0.0);
@@ -25,10 +27,24 @@ public class LrfServiceImpl implements LrfService {
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private Thread readerThread;
 
+    public LrfServiceImpl(FeatureConfig featureConfig) {
+        this.featureConfig = featureConfig;
+    }
+
     @Override
     public void startLrf() {
         if (running.get()) {
             logger.warn("LRF service already running");
+            return;
+        }
+
+        if (!featureConfig.getLrf().isEnabled()) {
+            logger.info("LRF service running in MOCK mode - no hardware initialization (disabled in config)");
+            running.set(true);
+            connected.set(false);
+            // Set mock data
+            distanceMeters.set(100.0);
+            angleDegrees.set(0.0);
             return;
         }
 
@@ -275,7 +291,7 @@ public class LrfServiceImpl implements LrfService {
 
     private void cleanup() {
         connected.set(false);
-        if (port != null && port.isOpen()) {
+        if (featureConfig.getLrf().isEnabled() && port != null && port.isOpen()) {
             port.closePort();
             logger.info("Serial port closed");
         }
