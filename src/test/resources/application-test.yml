@@ -7,14 +7,14 @@ spring:
     livereload:
       enabled: false  # Вимкнути LiveReload
 
-# Flags for hardware
+# Test configuration - disable hardware features
 features:
   gpio-buttons:
     enabled: false
   lrf:
     enabled: false
   camera:
-    day-camera-enabled: true
+    day-camera-enabled: false
     thermal-camera-enabled: false
   logger:
     enabled: false

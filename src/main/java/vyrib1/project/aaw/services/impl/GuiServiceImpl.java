@@ -4,12 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
-import org.opencv.core.Point;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
-import org.opencv.highgui.HighGui;
-import org.opencv.imgproc.Imgproc;
 import org.springframework.stereotype.Service;
+import vyrib1.project.aaw.config.FeatureConfig;
 import vyrib1.project.aaw.data.domain.GpioButtons;
 import vyrib1.project.aaw.services.CameraService;
 import vyrib1.project.aaw.services.GuiService;
@@ -23,14 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import vyrib1.project.aaw.config.FeatureConfig;
-
-import static org.opencv.imgproc.Imgproc.FONT_HERSHEY_SIMPLEX;
-import static org.opencv.imgproc.Imgproc.LINE_AA;
-import static org.opencv.imgproc.Imgproc.putText;
-
 @Service
-@RequiredArgsConstructor
 public class GuiServiceImpl implements GuiService {
 
     /* Last found position: x=325, y=320 */
@@ -38,27 +27,18 @@ public class GuiServiceImpl implements GuiService {
     private final CameraService cameraService;
     private final LrfService lrfService;
     private final FeatureConfig featureConfig;
+    private final SwingGuiServiceImpl swingGuiService;
 
     private GpioButtons gpioButtons;
 
     private int x = 640;
     private int y = 480;
-    private double lastDistance = 0.0;
 
-    static {
-        try {
-            // Try to load OpenCV native library
-            nu.pattern.OpenCV.loadLocally();
-            System.out.println("OpenCV loaded successfully");
-        } catch (Exception e) {
-            try {
-                System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-                System.out.println("OpenCV system library loaded");
-            } catch (Exception ex) {
-                System.err.println("Failed to load OpenCV: " + ex.getMessage());
-                ex.printStackTrace();
-            }
-        }
+    public GuiServiceImpl(CameraService cameraService, LrfService lrfService, FeatureConfig featureConfig, SwingGuiServiceImpl swingGuiService) {
+        this.cameraService = cameraService;
+        this.lrfService = lrfService;
+        this.featureConfig = featureConfig;
+        this.swingGuiService = swingGuiService;
     }
 
     @Override
@@ -90,25 +70,19 @@ public class GuiServiceImpl implements GuiService {
         }
         System.out.println("Camera frame size: " + testFrame.size());
 
-        // Text parameters
-        int font = FONT_HERSHEY_SIMPLEX;
-        double fontScale = 1.0;
-        int thickness = 2;
-        Scalar textColor = new Scalar(0, 0, 255); // Red color in BGR
-        Scalar crosshairColor = new Scalar(0, 0, 255); // Red color for crosshair
-        int crosshairThickness = 2;
-        int crosshairLength = 35; // Length of crosshair lines
-
         loadCoordinatesFromFiles();
 
-        HighGui.namedWindow("Camera Feed", HighGui.WINDOW_NORMAL);
-        HighGui.resizeWindow("Camera Feed", 720, 576);
-        // Use regular thread instead of virtual thread for GUI operations
+        // Create Swing GUI window (fullscreen mode)
+        swingGuiService.createAndShowGUI("Camera Feed", 720, 576, true);
+
+        // Wait for GUI to initialize
+        Thread.sleep(500);
+
+        // Use regular thread for GUI operations
         Thread guiThread = new Thread(() -> {
             System.out.println("GUI thread started");
-            Size newSize = new Size(720, 576);
             try {
-                while (true) {
+                while (swingGuiService.isRunning()) {
                     Mat frame = cameraService.getDayFrame();
                     if (frame == null || frame.empty()) {
                         System.err.println("Received empty frame, skipping...");
@@ -116,49 +90,15 @@ public class GuiServiceImpl implements GuiService {
                         continue;
                     }
 
-                    // Clone the frame to avoid modifying the original
-                    Mat displayFrame = frame.clone();
-                    Imgproc.resize(displayFrame, displayFrame, newSize);
-
-                    // Draw crosshair - horizontal line
-                    Imgproc.line(displayFrame,
-                            new Point(x - crosshairLength, y),
-                            new Point(x + crosshairLength, y),
-                            crosshairColor, crosshairThickness, LINE_AA);
-
-                    // Draw crosshair - vertical line
-                    Imgproc.line(displayFrame,
-                            new Point(x, y - crosshairLength),
-                            new Point(x, y + crosshairLength),
-                            crosshairColor, crosshairThickness, LINE_AA);
-
-                    int currentY = displayFrame.rows() - 30;
-
-                    // Add distance text to the frame
+                    // Prepare text overlay
                     String distanceText = lrfService.getDistanceMeters() + "m";
-                    putText(displayFrame, distanceText,
-                            new Point(10, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
-
-                    //Add angle text to the frame
                     String angleText = lrfService.getAngleDegrees() + "*";
-                    putText(displayFrame, angleText,
-                            new Point(135, currentY), font, fontScale, textColor, thickness, LINE_AA, false);
 
+                    // Update Swing GUI with frame, crosshair and text
+                    swingGuiService.updateFrame(frame, x, y, distanceText, angleText);
 
-                    // Display the frame using OpenCV's imshow
-                    HighGui.imshow("Camera Feed", displayFrame);
-
-                    // Wait for key press (30ms delay) - this is necessary for imshow to work
-                    int key = HighGui.waitKey(30);
-
-                    // Break on ESC key or 'q'
-                    if (key == 27 || key == 'q' || key == 'Q') {
-                        System.out.println("Exit key pressed, closing GUI");
-                        break;
-                    }
-
-                    // Release the cloned frame
-                    displayFrame.release();
+                    // Small delay for frame rate control (~30 FPS)
+                    Thread.sleep(33);
                 }
             } catch (Exception e) {
                 System.err.println("Error in GUI thread: " + e.getMessage());
@@ -166,7 +106,7 @@ public class GuiServiceImpl implements GuiService {
             } finally {
                 // Clean up
                 System.out.println("Cleaning up GUI resources");
-                HighGui.destroyAllWindows();
+                swingGuiService.close();
             }
         });
 

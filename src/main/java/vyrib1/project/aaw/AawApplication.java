@@ -10,7 +10,7 @@ import vyrib1.project.aaw.services.GuiService;
 @SpringBootApplication
 public class AawApplication {
 
-    private GuiService guiService;
+    private final GuiService guiService;
 
     public AawApplication(GuiService guiService) {
         this.guiService = guiService;

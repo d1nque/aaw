@@ -17,7 +17,7 @@ public class CameraServiceImpl implements CameraService {
 
     private final FeatureConfig featureConfig;
     private VideoCapture dayCamera;
-    private Mat dayFrame = new Mat();
+    private Mat dayFrame;
 
     //TODO after thermal camera implementation
     //private VideoCapture thermalCamera;
@@ -26,26 +26,35 @@ public class CameraServiceImpl implements CameraService {
     @SneakyThrows
     public CameraServiceImpl(FeatureConfig featureConfig) {
         this.featureConfig = featureConfig;
-        
-        if (featureConfig.getCamera().isDayCameraEnabled()) {
-            dayCamera = new VideoCapture(DAY_CAMERA_INDEX);
-            Thread.sleep(500);
-            setDayCameraProperties();
-            Thread.sleep(1000);
-            startReadingCamera();
-        } else {
-            System.out.println("Day camera running in MOCK mode - no hardware initialization (disabled in config)");
-            // Create empty mock frame with fixed size (1280x960)
-            dayFrame = new Mat(960, 1280, org.opencv.core.CvType.CV_8UC3);
+
+        try {
+            loadOpenCV();
+            
+            dayFrame = new Mat();
+            
+            if (featureConfig.getCamera().isDayCameraEnabled()) {
+                dayCamera = new VideoCapture(DAY_CAMERA_INDEX);
+                Thread.sleep(500);
+                setDayCameraProperties();
+                Thread.sleep(1000);
+                startReadingCamera();
+            } else {
+                System.out.println("Day camera running in MOCK mode - no hardware initialization (disabled in config)");
+                // Create empty mock frame with fixed size (1280x960)
+                dayFrame = new Mat(960, 1280, org.opencv.core.CvType.CV_8UC3);
+            }
+            //TODO after thermal camera implementation
+            //if (featureConfig.getCamera().isThermalCameraEnabled()) {
+            //    this.thermalCamera = new VideoCapture(2);
+            //    Thread.sleep(500);
+            //    setThermalCameraProperties();
+            //    Thread.sleep(1000);
+            //    startReadingThermalCamera();
+            //}
+        } catch (Exception e) {
+            System.out.println("Error initializing camera: " + e.getMessage());
+            e.printStackTrace();
         }
-        //TODO after thermal camera implementation
-        //if (featureConfig.getCamera().isThermalCameraEnabled()) {
-        //    this.thermalCamera = new VideoCapture(2);
-        //    Thread.sleep(500);
-        //    setThermalCameraProperties();
-        //    Thread.sleep(1000);
-        //    startReadingThermalCamera();
-        //}
     }
 
     private void startReadingCamera() {
@@ -67,5 +76,15 @@ public class CameraServiceImpl implements CameraService {
     @Override
     public Mat getDayFrame() {
         return dayFrame;
+    }
+
+    private void loadOpenCV() {
+        try {
+            nu.pattern.OpenCV.loadLocally();
+            System.out.println("OpenCV loaded successfully via openpnp");
+        } catch (Exception e) {
+            System.err.println("Failed to load OpenCV: " + e.getMessage());
+            throw new RuntimeException("Cannot initialize OpenCV", e);
+        }
     }
 }
