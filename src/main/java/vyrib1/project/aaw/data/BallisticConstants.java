@@ -95,7 +95,7 @@ public class BallisticConstants {
      * Радіус жовтого кола упередження в пікселях.
      * Визначає розмір кола, яке показує точку прицілювання.
      */
-    public static final int AIM_CIRCLE_RADIUS = 30;
+    public static final int AIM_CIRCLE_RADIUS = 15;
 
     /**
      * Товщина лінії жовтого кола в пікселях.

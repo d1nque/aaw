@@ -6,6 +6,7 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.springframework.stereotype.Component;
+import vyrib1.project.aaw.data.BallisticConstants;
 
 import javax.swing.*;
 import java.awt.*;
@@ -144,7 +145,7 @@ public class SwingGuiServiceImpl {
     }
 
     /**
-     * Draws text overlay (distance and angle)
+     * Draws text overlay (distance, angle, target speed)
      */
     private void drawTextOverlay(Mat frame, String distanceText, String angleText) {
         int font = Imgproc.FONT_HERSHEY_SIMPLEX;
@@ -159,7 +160,12 @@ public class SwingGuiServiceImpl {
         
         // Draw angle
         Imgproc.putText(frame, angleText,
-                new Point(135, yPosition), font, fontScale, textColor, thickness, LINE_AA, false);
+                new Point(235, yPosition), font, fontScale, textColor, thickness, LINE_AA, false);
+
+        // TODO Delete
+        // Draw speed
+        Imgproc.putText(frame, BallisticConstants.TARGET_SPEED_KMH + "km/h",
+                new Point(365, yPosition), font, fontScale, textColor, thickness, LINE_AA, false);
     }
 
     /**
