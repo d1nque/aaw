@@ -15,7 +15,6 @@ public class Constants {
         public static final int RIGHT_BTN_PIN = 16;
     }
 
-
     public static final class OpenCV {
         public static final int DAY_CAMERA_INDEX = 0;
         //TODO after thermal camera implementation

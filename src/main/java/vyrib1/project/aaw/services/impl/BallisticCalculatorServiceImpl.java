@@ -1,6 +1,8 @@
 package vyrib1.project.aaw.services.impl;
 
 import org.opencv.core.Point;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import vyrib1.project.aaw.data.BallisticConstants;
 import vyrib1.project.aaw.services.BallisticCalculatorService;
@@ -14,10 +16,27 @@ import vyrib1.project.aaw.services.BallisticCalculatorService;
 @Service
 public class BallisticCalculatorServiceImpl implements BallisticCalculatorService {
 
+    private static final Logger logger = LoggerFactory.getLogger(BallisticCalculatorServiceImpl.class);
+
     @Override
     public Point calculatePixelOffsets(double comeUpMrad, double leadMrad, 
                                       int frameWidth, int frameHeight, 
                                       double fovXdeg, double fovYdeg) {
+        // Validate input parameters
+        if (frameWidth <= 0 || frameHeight <= 0) {
+            logger.warn("Invalid frame dimensions: {}x{}, using defaults", frameWidth, frameHeight);
+            frameWidth = Math.max(1, frameWidth);
+            frameHeight = Math.max(1, frameHeight);
+        }
+        if (fovXdeg <= 0 || fovXdeg >= 180) {
+            logger.warn("Invalid horizontal FOV: {}, using default", fovXdeg);
+            fovXdeg = BallisticConstants.FOV_HORIZONTAL_DEG;
+        }
+        if (fovYdeg <= 0 || fovYdeg >= 180) {
+            logger.warn("Invalid vertical FOV: {}, using default", fovYdeg);
+            fovYdeg = BallisticConstants.FOV_VERTICAL_DEG;
+        }
+        
         // Обчислюємо фокальні відстані для pinhole camera model
         double fx = calculateFocalLengthX(frameWidth, fovXdeg);
         double fy = calculateFocalLengthY(frameHeight, fovYdeg);
@@ -154,6 +173,16 @@ public class BallisticCalculatorServiceImpl implements BallisticCalculatorServic
 
     @Override
     public Point calculateBallisticCorrections(double range, double muzzleVelocity, double targetSpeed) {
+        // Validate input parameters
+        if (range <= 0) {
+            logger.warn("Invalid range: {}, using default", range);
+            range = BallisticConstants.TARGET_DISTANCE;
+        }
+        if (muzzleVelocity <= 0) {
+            logger.warn("Invalid muzzle velocity: {}, using default", muzzleVelocity);
+            muzzleVelocity = BallisticConstants.MUZZLE_VELOCITY_MPS;
+        }
+        
         // Крок 1: Розраховуємо час польоту
         double flightTime = calculateFlightTime(range, muzzleVelocity);
         

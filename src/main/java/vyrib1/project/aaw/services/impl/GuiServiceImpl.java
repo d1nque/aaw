@@ -1,254 +1,274 @@
 package vyrib1.project.aaw.services.impl;
 
-import lombok.SneakyThrows;
+import jakarta.annotation.PreDestroy;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import vyrib1.project.aaw.config.FeatureConfig;
 import vyrib1.project.aaw.data.BallisticConstants;
+import vyrib1.project.aaw.data.domain.Coordinates;
 import vyrib1.project.aaw.data.domain.GpioButtons;
 import vyrib1.project.aaw.services.BallisticCalculatorService;
 import vyrib1.project.aaw.services.CameraService;
+import vyrib1.project.aaw.services.CoordinatesPersistenceService;
 import vyrib1.project.aaw.services.GuiService;
 import vyrib1.project.aaw.services.LrfService;
 
 import java.awt.event.KeyEvent;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
+/**
+ * Main GUI service that coordinates camera, LRF, and GUI display.
+ */
 @Service
 public class GuiServiceImpl implements GuiService {
 
-    /* Last found position: x=325, y=320 */
+    private static final Logger logger = LoggerFactory.getLogger(GuiServiceImpl.class);
+
+    // GUI Constants
+    private static final int DEFAULT_GUI_WIDTH = 720;
+    private static final int DEFAULT_GUI_HEIGHT = 576;
+    private static final int CROSSHAIR_MOVE_STEP = 5;
+    //private static final int FRAME_DELAY_MS = 33; // ~30 FPS
+    private static final int FRAME_DELAY_MS = 15; // ~30 FPS
+    private static final int GUI_INIT_DELAY_MS = 2000;
+    private static final int GUI_READY_DELAY_MS = 500;
+    private static final int GPIO_POLL_INTERVAL_MS = 100;
+    private static final int FRAME_WAIT_DELAY_MS = 30;
+    private static final double MAX_VALID_RANGE_METERS = 3000.0;
 
     private final CameraService cameraService;
     private final LrfService lrfService;
     private final FeatureConfig featureConfig;
     private final SwingGuiServiceImpl swingGuiService;
     private final BallisticCalculatorService ballisticCalculatorService;
+    private final CoordinatesPersistenceService coordinatesPersistenceService;
 
     private GpioButtons gpioButtons;
+    private Coordinates currentCoordinates;
 
-    private int x = 640;
-    private int y = 480;
-
-    public GuiServiceImpl(CameraService cameraService, LrfService lrfService, 
+    public GuiServiceImpl(CameraService cameraService, LrfService lrfService,
                          FeatureConfig featureConfig, SwingGuiServiceImpl swingGuiService,
-                         BallisticCalculatorService ballisticCalculatorService) {
+                         BallisticCalculatorService ballisticCalculatorService,
+                         CoordinatesPersistenceService coordinatesPersistenceService) {
         this.cameraService = cameraService;
         this.lrfService = lrfService;
         this.featureConfig = featureConfig;
         this.swingGuiService = swingGuiService;
         this.ballisticCalculatorService = ballisticCalculatorService;
+        this.coordinatesPersistenceService = coordinatesPersistenceService;
     }
 
     @Override
-    @SneakyThrows
     public void startGui() {
+        try {
+            initializeLrfService();
+            initializeGpioButtons();
+            
+            logger.info("Starting GUI...");
+            Thread.sleep(GUI_INIT_DELAY_MS);
+            
+            currentCoordinates = coordinatesPersistenceService.loadCoordinates();
+            
+            // Create Swing GUI window (fullscreen mode)
+            swingGuiService.createAndShowGUI("Camera Feed", DEFAULT_GUI_WIDTH, DEFAULT_GUI_HEIGHT, true);
+            
+            // Wait for GUI to initialize
+            Thread.sleep(GUI_READY_DELAY_MS);
+            
+            startGuiDisplayLoop();
+            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.error("GUI startup interrupted", e);
+        } catch (Exception e) {
+            logger.error("Error starting GUI", e);
+        }
+    }
+
+    /**
+     * Initializes LRF service if enabled in configuration.
+     */
+    private void initializeLrfService() {
         if (featureConfig.getLrf().isEnabled()) {
-            System.out.printf("Starting LRF service...%n");
+            logger.info("Starting LRF service...");
             lrfService.startLrf();
         } else {
-            System.out.println("LRF service disabled in config");
+            logger.info("LRF service disabled in config");
         }
+    }
 
+    /**
+     * Initializes GPIO buttons if enabled in configuration.
+     */
+    private void initializeGpioButtons() {
         if (featureConfig.getGpioButtons().isEnabled()) {
-            System.out.println("Initializing GPIO buttons...");
+            logger.info("Initializing GPIO buttons...");
             gpioButtons = new GpioButtons();
             startReadingGpioButtons();
         } else {
-            System.out.println("GPIO buttons disabled in config");
+            logger.info("GPIO buttons disabled in config");
         }
+    }
 
-        System.out.println("Starting GUI...");
-        Thread.sleep(2000);
-
-        loadCoordinatesFromFiles();
-
-        // Create Swing GUI window (fullscreen mode)
-        swingGuiService.createAndShowGUI("Camera Feed", 720, 576, true);
-
-        // Wait for GUI to initialize
-        Thread.sleep(500);
-
-        // Use regular thread for GUI operations
+    /**
+     * Starts the main GUI display loop in a separate thread.
+     */
+    private void startGuiDisplayLoop() {
         Thread guiThread = new Thread(() -> {
-            System.out.println("GUI thread started");
+            logger.info("GUI display thread started");
             try {
                 while (swingGuiService.isRunning()) {
-                    Mat frame = cameraService.getDayFrame();
-                    if (frame == null || frame.empty()) {
-                        //System.err.println("Received empty frame, skipping...");
-                        Thread.sleep(30);
-                        continue;
-                    }
-
-                    // Get frame dimensions
-                    int frameWidth = frame.cols();
-                    int frameHeight = frame.rows();
-
-                    // Get distance from LRF sensor
-                    double rangeFromLrf = lrfService.getDistanceMeters();
-                    
-                    // Calculate ballistic aim point (yellow circle position)
-                    // Use real distance from LRF if available (> 0), otherwise use constant
-                    Point aimPoint;
-                    if (rangeFromLrf > 0 && rangeFromLrf < 3000) {
-                        // Use dynamic calculation with LRF distance
-                        aimPoint = ballisticCalculatorService.calculateAimPoint(
-                            x, y, frameWidth, frameHeight, rangeFromLrf
-                        );
-                    } else {
-                        // Use constant distance from BallisticConstants
-                        rangeFromLrf = BallisticConstants.TARGET_DISTANCE;
-                        aimPoint = ballisticCalculatorService.calculateAimPoint(
-                            x, y, frameWidth, frameHeight
-                        );
-                    }
-
-                    // Prepare text overlay
-                    String distanceText = rangeFromLrf + "m";
-                    String angleText = lrfService.getAngleDegrees() + "*";
-
-                    // Update Swing GUI with frame, crosshair, aim circle and text
-                    swingGuiService.updateFrame(frame, x, y, distanceText, angleText,
-                        (int)aimPoint.x, (int)aimPoint.y);
-
-                    // Small delay for frame rate control (~30 FPS)
-                    //TODO CHECK MORE DETAILED FPS CONTROL
-                    Thread.sleep(33);
+                    processFrame();
                 }
             } catch (Exception e) {
-                System.err.println("Error in GUI thread: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("Error in GUI display thread", e);
             } finally {
-                // Clean up
-                System.out.println("Cleaning up GUI resources");
-                swingGuiService.close();
+                cleanup();
             }
         });
 
         guiThread.setDaemon(false);
         guiThread.setName("GUI-Display-Thread");
         guiThread.start();
-        System.out.println("GUI thread launched");
+        logger.info("GUI display thread launched");
     }
 
-    private void loadCoordinatesFromFiles() {
-        Path xPath = Paths.get("x.txt");
-        Path yPath = Paths.get("y.txt");
-
-        try {
-            if (Files.exists(xPath)) {
-                String xContent = Files.readString(xPath).trim();
-                this.x = Integer.parseInt(xContent);
-            } else {
-                System.out.println("x.txt not found, using default x=0");
-                this.x = 0;
-            }
-        } catch (Exception e) {
-            System.out.println("Error reading x.txt, using default x=0" + e.getMessage());
-            this.x = 0;
+    /**
+     * Processes a single frame: gets camera frame, calculates ballistic aim point,
+     * and updates the GUI display.
+     */
+    private void processFrame() throws InterruptedException {
+        Mat frame = cameraService.getDayFrame();
+        if (frame == null || frame.empty()) {
+            Thread.sleep(FRAME_WAIT_DELAY_MS);
+            return;
         }
 
-        try {
-            if (Files.exists(yPath)) {
-                String yContent = Files.readString(yPath).trim();
-                this.y = Integer.parseInt(yContent);
-            } else {
-                System.out.println("y.txt not found, using default y=0");
-                this.y = 0;
-            }
-        } catch (Exception e) {
-            System.out.println("Error reading y.txt, using default y=0" + e.getMessage());
-            this.y = 0;
+        int frameWidth = frame.cols();
+        int frameHeight = frame.rows();
+
+        double rangeFromLrf = lrfService.getDistanceMeters();
+        Point aimPoint = calculateAimPoint(frameWidth, frameHeight, rangeFromLrf);
+
+        // Update range if invalid
+        if (rangeFromLrf <= 0 || rangeFromLrf >= MAX_VALID_RANGE_METERS) {
+            rangeFromLrf = BallisticConstants.TARGET_DISTANCE;
         }
 
-        System.out.println("Loaded coordinates: x={" + this.x + "}, y={" + this.y + "}");
+        String distanceText = rangeFromLrf + "m";
+        String angleText = lrfService.getAngleDegrees() + "*";
+        String speedText = BallisticConstants.TARGET_SPEED_KMH + "km/h";
+
+        swingGuiService.updateFrame(frame, currentCoordinates.x(), currentCoordinates.y(),
+                distanceText, angleText, speedText, (int) aimPoint.x, (int) aimPoint.y);
+
+        Thread.sleep(FRAME_DELAY_MS);
     }
 
+    /**
+     * Calculates the ballistic aim point based on LRF distance or default.
+     */
+    private Point calculateAimPoint(int frameWidth, int frameHeight, double rangeFromLrf) {
+        if (rangeFromLrf > 0 && rangeFromLrf < MAX_VALID_RANGE_METERS) {
+            return ballisticCalculatorService.calculateAimPoint(
+                    currentCoordinates.x(), currentCoordinates.y(),
+                    frameWidth, frameHeight, rangeFromLrf
+            );
+        } else {
+            return ballisticCalculatorService.calculateAimPoint(
+                    currentCoordinates.x(), currentCoordinates.y(),
+                    frameWidth, frameHeight
+            );
+        }
+    }
 
+    /**
+     * Starts background thread for reading GPIO button inputs.
+     */
     private void startReadingGpioButtons() {
-        Thread.startVirtualThread(() -> {
-            System.out.println("Started reading GPIO buttons");
-            while (true) {
+        Thread.ofVirtual().name("GPIO-Button-Reader").start(() -> {
+            logger.info("Started reading GPIO buttons");
+            while (swingGuiService.isRunning()) {
                 try {
                     int key = getGpioButtonStatus();
                     if (key != 0) {
                         handleGpioButtonPress(key);
-                        saveCoordinatesToFile();
-                        System.out.println("GPIO Button Pressed: " + KeyEvent.getKeyText(key));
-                        System.out.println("Current Position: x=" + x + ", y=" + y);
+                        coordinatesPersistenceService.saveCoordinates(currentCoordinates);
+                        logger.debug("GPIO Button: {} - Position: {}", KeyEvent.getKeyText(key), currentCoordinates);
                     }
-                    Thread.sleep(100);
-                } catch (IOException | InterruptedException e) {
-                    System.err.println("Error reading GPIO buttons: " + e.getMessage());
-                    e.printStackTrace();
+                    Thread.sleep(GPIO_POLL_INTERVAL_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    logger.info("GPIO button reader interrupted");
+                    break;
+                } catch (Exception e) {
+                    logger.error("Error reading GPIO buttons", e);
                 }
             }
+            logger.info("Stopped reading GPIO buttons");
         });
     }
 
+    /**
+     * Handles GPIO button press by updating crosshair coordinates.
+     */
     private void handleGpioButtonPress(int key) {
+        int newX = currentCoordinates.x();
+        int newY = currentCoordinates.y();
+
         switch (key) {
-            case KeyEvent.VK_RIGHT:
-                x += 5;
-                break;
-            case KeyEvent.VK_LEFT:
-                x -= 5;
-                break;
-            case KeyEvent.VK_UP:
-                y -= 5;
-                break;
-            case KeyEvent.VK_DOWN:
-                y += 5;
-                break;
-            case KeyEvent.VK_SPACE:
-                System.out.println("Center button pressed");
-                break;
+            case KeyEvent.VK_RIGHT -> newX += CROSSHAIR_MOVE_STEP;
+            case KeyEvent.VK_LEFT -> newX -= CROSSHAIR_MOVE_STEP;
+            case KeyEvent.VK_UP -> newY -= CROSSHAIR_MOVE_STEP;
+            case KeyEvent.VK_DOWN -> newY += CROSSHAIR_MOVE_STEP;
+            case KeyEvent.VK_SPACE -> logger.info("Center button pressed");
+            default -> logger.warn("Unknown key code: {}", key);
+        }
+
+        // Ensure coordinates stay non-negative
+        if (newX >= 0 && newY >= 0) {
+            currentCoordinates = new Coordinates(newX, newY);
         }
     }
 
-    private int getGpioButtonStatus() throws IOException {
+    /**
+     * Gets the currently pressed GPIO button status.
+     */
+    private int getGpioButtonStatus() {
         if (gpioButtons == null) {
             return 0;
         }
 
-        int result = 0;
-
-        if (gpioButtons.centerBtn.isActive()) {
-            result = KeyEvent.VK_SPACE;
-        } else if (gpioButtons.upBtn.isActive()) {
-            result = KeyEvent.VK_UP;
-        } else if (gpioButtons.downBtn.isActive()) {
-            result = KeyEvent.VK_DOWN;
-        } else if (gpioButtons.leftBtn.isActive()) {
-            result = KeyEvent.VK_LEFT;
-        } else if (gpioButtons.rightBtn.isActive()) {
-            result = KeyEvent.VK_RIGHT;
+        if (gpioButtons.getCenterBtn().isActive()) {
+            return KeyEvent.VK_SPACE;
+        } else if (gpioButtons.getUpBtn().isActive()) {
+            return KeyEvent.VK_UP;
+        } else if (gpioButtons.getDownBtn().isActive()) {
+            return KeyEvent.VK_DOWN;
+        } else if (gpioButtons.getLeftBtn().isActive()) {
+            return KeyEvent.VK_LEFT;
+        } else if (gpioButtons.getRightBtn().isActive()) {
+            return KeyEvent.VK_RIGHT;
         }
 
-        return result;
+        return 0;
     }
 
-    private void saveCoordinatesToFile() {
-        try (PrintWriter writer = new PrintWriter(new FileWriter("x.txt", false))) {
-            writer.printf(String.valueOf(x));
-            System.out.printf("Saved x: " + x);
-        } catch (IOException e) {
-            System.err.println("Error writing x coordinates to file: " + e.getMessage());
+    /**
+     * Cleanup method for releasing resources.
+     */
+    @PreDestroy
+    public void cleanup() {
+        logger.info("Cleaning up GUI service resources");
+        
+        if (gpioButtons != null) {
+            gpioButtons.close();
+            logger.info("GPIO buttons closed");
         }
-
-        try (PrintWriter writer = new PrintWriter(new FileWriter("y.txt", false))) {
-            writer.printf(String.valueOf(y));
-            System.out.printf("Saved y: " + y);
-        } catch (IOException e) {
-            System.err.println("Error writing y coordinates to file: " + e.getMessage());
-        }
+        
+        swingGuiService.close();
+        logger.info("GUI service cleanup completed");
     }
-
 }
