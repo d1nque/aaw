@@ -2,9 +2,12 @@ package vyrib1.project.aaw.services.impl;
 
 import lombok.SneakyThrows;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
 import org.springframework.stereotype.Service;
 import vyrib1.project.aaw.config.FeatureConfig;
+import vyrib1.project.aaw.data.BallisticConstants;
 import vyrib1.project.aaw.data.domain.GpioButtons;
+import vyrib1.project.aaw.services.BallisticCalculatorService;
 import vyrib1.project.aaw.services.CameraService;
 import vyrib1.project.aaw.services.GuiService;
 import vyrib1.project.aaw.services.LrfService;
@@ -26,17 +29,21 @@ public class GuiServiceImpl implements GuiService {
     private final LrfService lrfService;
     private final FeatureConfig featureConfig;
     private final SwingGuiServiceImpl swingGuiService;
+    private final BallisticCalculatorService ballisticCalculatorService;
 
     private GpioButtons gpioButtons;
 
     private int x = 640;
     private int y = 480;
 
-    public GuiServiceImpl(CameraService cameraService, LrfService lrfService, FeatureConfig featureConfig, SwingGuiServiceImpl swingGuiService) {
+    public GuiServiceImpl(CameraService cameraService, LrfService lrfService, 
+                         FeatureConfig featureConfig, SwingGuiServiceImpl swingGuiService,
+                         BallisticCalculatorService ballisticCalculatorService) {
         this.cameraService = cameraService;
         this.lrfService = lrfService;
         this.featureConfig = featureConfig;
         this.swingGuiService = swingGuiService;
+        this.ballisticCalculatorService = ballisticCalculatorService;
     }
 
     @Override
@@ -80,14 +87,39 @@ public class GuiServiceImpl implements GuiService {
                         continue;
                     }
 
+                    // Get frame dimensions
+                    int frameWidth = frame.cols();
+                    int frameHeight = frame.rows();
+
+                    // Get distance from LRF sensor
+                    double rangeFromLrf = lrfService.getDistanceMeters();
+                    
+                    // Calculate ballistic aim point (yellow circle position)
+                    // Use real distance from LRF if available (> 0), otherwise use constant
+                    Point aimPoint;
+                    if (rangeFromLrf > 0 && rangeFromLrf < 3000) {
+                        // Use dynamic calculation with LRF distance
+                        aimPoint = ballisticCalculatorService.calculateAimPoint(
+                            x, y, frameWidth, frameHeight, rangeFromLrf
+                        );
+                    } else {
+                        // Use constant distance from BallisticConstants
+                        rangeFromLrf = BallisticConstants.TARGET_DISTANCE;
+                        aimPoint = ballisticCalculatorService.calculateAimPoint(
+                            x, y, frameWidth, frameHeight
+                        );
+                    }
+
                     // Prepare text overlay
-                    String distanceText = lrfService.getDistanceMeters() + "m";
+                    String distanceText = rangeFromLrf + "m";
                     String angleText = lrfService.getAngleDegrees() + "*";
 
-                    // Update Swing GUI with frame, crosshair and text
-                    swingGuiService.updateFrame(frame, x, y, distanceText, angleText);
+                    // Update Swing GUI with frame, crosshair, aim circle and text
+                    swingGuiService.updateFrame(frame, x, y, distanceText, angleText,
+                        (int)aimPoint.x, (int)aimPoint.y);
 
                     // Small delay for frame rate control (~30 FPS)
+                    //TODO CHECK MORE DETAILED FPS CONTROL
                     Thread.sleep(33);
                 }
             } catch (Exception e) {

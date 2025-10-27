@@ -1,6 +1,5 @@
 package vyrib1.project.aaw.services.impl;
 
-import lombok.RequiredArgsConstructor;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
@@ -53,10 +52,11 @@ public class SwingGuiServiceImpl {
     }
 
     /**
-     * Updates the displayed frame with crosshair and text overlay
+     * Updates the displayed frame with crosshair, aim circle and text overlay
      */
     public void updateFrame(Mat frame, int crosshairX, int crosshairY, 
-                           String distanceText, String angleText) {
+                           String distanceText, String angleText,
+                           int aimCircleX, int aimCircleY) {
         if (!running || videoPanel == null || frame == null || frame.empty()) {
             return;
         }
@@ -73,11 +73,18 @@ public class SwingGuiServiceImpl {
                 // Scale crosshair coordinates proportionally
                 double scaleX = targetSize.width / 720.0;
                 double scaleY = targetSize.height / 576.0;
-                int scaledX = (int)(crosshairX * scaleX);
-                int scaledY = (int)(crosshairY * scaleY);
+                int scaledCrosshairX = (int)(crosshairX * scaleX);
+                int scaledCrosshairY = (int)(crosshairY * scaleY);
+                
+                // Scale aim circle coordinates proportionally
+                int scaledAimX = (int)(aimCircleX * scaleX);
+                int scaledAimY = (int)(aimCircleY * scaleY);
                 
                 // Draw crosshair
-                drawCrosshair(displayFrame, scaledX, scaledY);
+                drawCrosshair(displayFrame, scaledCrosshairX, scaledCrosshairY);
+                
+                // Draw aim circle (yellow circle showing ballistic lead point)
+                drawAimCircle(displayFrame, scaledAimX, scaledAimY);
                 
                 // Draw text overlay
                 drawTextOverlay(displayFrame, distanceText, angleText);
@@ -116,6 +123,24 @@ public class SwingGuiServiceImpl {
                 new Point(x, y - length),
                 new Point(x, y + length),
                 crosshairColor, thickness, LINE_AA);
+    }
+
+    /**
+     * Draws aim circle (ballistic lead indicator) on the frame
+     */
+    private void drawAimCircle(Mat frame, int x, int y) {
+        // Import constants from BallisticConstants
+        Scalar circleColor = vyrib1.project.aaw.data.BallisticConstants.AIM_CIRCLE_COLOR;
+        int radius = vyrib1.project.aaw.data.BallisticConstants.AIM_CIRCLE_RADIUS;
+        int thickness = vyrib1.project.aaw.data.BallisticConstants.AIM_CIRCLE_THICKNESS;
+        
+        // Draw circle at ballistic aim point
+        Imgproc.circle(frame,
+                new Point(x, y),
+                radius,
+                circleColor,
+                thickness,
+                LINE_AA);
     }
 
     /**
