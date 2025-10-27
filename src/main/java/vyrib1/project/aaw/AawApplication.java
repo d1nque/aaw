@@ -17,7 +17,6 @@ public class AawApplication {
     }
 
     public static void main(String[] args) {
-        nu.pattern.OpenCV.loadLocally();
         System.setProperty("java.awt.headless", "false");
         SpringApplication.run(AawApplication.class, args);
     }

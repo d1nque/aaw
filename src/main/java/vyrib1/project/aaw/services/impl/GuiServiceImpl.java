@@ -1,8 +1,6 @@
 package vyrib1.project.aaw.services.impl;
 
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.springframework.stereotype.Service;
 import vyrib1.project.aaw.config.FeatureConfig;
@@ -62,14 +60,6 @@ public class GuiServiceImpl implements GuiService {
         System.out.println("Starting GUI...");
         Thread.sleep(2000);
 
-        // Check if camera service is working
-        Mat testFrame = cameraService.getDayFrame();
-        if (testFrame == null || testFrame.empty()) {
-            System.err.println("Camera frame is null or empty!");
-            return;
-        }
-        System.out.println("Camera frame size: " + testFrame.size());
-
         loadCoordinatesFromFiles();
 
         // Create Swing GUI window (fullscreen mode)
@@ -85,7 +75,7 @@ public class GuiServiceImpl implements GuiService {
                 while (swingGuiService.isRunning()) {
                     Mat frame = cameraService.getDayFrame();
                     if (frame == null || frame.empty()) {
-                        System.err.println("Received empty frame, skipping...");
+                        //System.err.println("Received empty frame, skipping...");
                         Thread.sleep(30);
                         continue;
                     }

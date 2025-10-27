@@ -7,6 +7,12 @@ spring:
     livereload:
       enabled: false  # Вимкнути LiveReload
 
+# Зменшити verbosity OpenCV логів
+logging:
+  level:
+    root: INFO
+    vyrib1.project.aaw: INFO
+
 # Flags for hardware
 features:
   gpio-buttons:
